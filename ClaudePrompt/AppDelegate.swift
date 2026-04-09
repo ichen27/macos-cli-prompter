@@ -1,8 +1,9 @@
 import AppKit
 
-final class AppDelegate: NSObject, NSApplicationDelegate, PromptPanelDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, PromptPanelDelegate, StatusBarPopoverDelegate {
     private var statusItem: NSStatusItem!
     private let promptPanel = PromptPanel()
+    private let statusPopover = StatusBarPopover()
     private var capturedText: String?
     private let history = PromptHistoryManager.shared
 
@@ -12,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, PromptPanelDelegate {
         setupHotkey()
         setupClipboardWatcher()
         promptPanel.promptDelegate = self
+        statusPopover.delegate = self
 
         NSApp.setActivationPolicy(.accessory)
         NSApp.servicesProvider = self
@@ -43,14 +45,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, PromptPanelDelegate {
         if let button = statusItem.button {
             button.image = createMenuBarImage()
             button.image?.isTemplate = true
+            button.action = #selector(statusBarClicked(_:))
+            button.target = self
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
+    }
 
-        rebuildMenu()
+    @objc private func statusBarClicked(_ sender: NSStatusBarButton) {
+        let event = NSApp.currentEvent
+        if event?.type == .rightMouseUp {
+            // Right-click: show quit menu
+            let menu = NSMenu()
+            menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+            statusItem.menu = menu
+            statusItem.button?.performClick(nil)
+            statusItem.menu = nil
+        } else {
+            // Left-click: toggle popover
+            guard let button = statusItem.button else { return }
+            statusPopover.toggle(relativeTo: button)
+        }
     }
 
     private func createMenuBarImage() -> NSImage {
         let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
-            // Draw ">_" icon
             let attrs: [NSAttributedString.Key: Any] = [
                 .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .medium),
                 .foregroundColor: NSColor.black
@@ -68,45 +86,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, PromptPanelDelegate {
         return image
     }
 
-    private func rebuildMenu() {
-        let menu = NSMenu()
-
-        let recentItems = history.history
-        if !recentItems.isEmpty {
-            let header = NSMenuItem(title: "Recent", action: nil, keyEquivalent: "")
-            header.isEnabled = false
-            menu.addItem(header)
-
-            for (index, prompt) in recentItems.prefix(10).enumerated() {
-                let truncated = prompt.count > 50 ? String(prompt.prefix(47)) + "..." : prompt
-                let item = NSMenuItem(title: truncated, action: #selector(resendPrompt(_:)), keyEquivalent: "")
-                item.target = self
-                item.tag = index
-                menu.addItem(item)
-            }
-
-            menu.addItem(NSMenuItem.separator())
-
-            let clearItem = NSMenuItem(title: "Clear History", action: #selector(clearHistory), keyEquivalent: "")
-            clearItem.target = self
-            menu.addItem(clearItem)
-
-            menu.addItem(NSMenuItem.separator())
-        }
-
-        let quitItem = NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        menu.addItem(quitItem)
-
-        statusItem.menu = menu
-    }
-
     // MARK: - Clipboard Watcher
 
     private func setupClipboardWatcher() {
         ClipboardWatcher.shared.onDoubleCopy = { [weak self] text in
             self?.debugLog("Double-copy detected: '\(text.prefix(30))...'")
             self?.capturedText = text
-            self?.promptPanel.show(selectedTextLength: text.count)
+            // Show in popover anchored to status bar
+            if let button = self?.statusItem.button {
+                self?.statusPopover.showWithContext(text, relativeTo: button)
+            }
         }
         ClipboardWatcher.shared.start()
     }
@@ -128,12 +117,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, PromptPanelDelegate {
         }
     }
 
-    // MARK: - PromptPanelDelegate
+    // MARK: - PromptPanelDelegate (for hotkey/services floating panel)
 
     func promptPanel(_ panel: PromptPanel, didSubmitPrompt prompt: String) {
         panel.dismiss()
         history.add(prompt)
-        rebuildMenu()
         iTermBridge.send(prompt: prompt, context: capturedText)
         capturedText = nil
     }
@@ -143,23 +131,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, PromptPanelDelegate {
         capturedText = nil
     }
 
-    // MARK: - Menu Actions
+    // MARK: - StatusBarPopoverDelegate
 
-    @objc private func resendPrompt(_ sender: NSMenuItem) {
-        let items = history.history
-        guard sender.tag < items.count else { return }
-        let prompt = items[sender.tag]
-
-        HotkeyManager.shared.captureSelectedText { [weak self] text in
-            self?.history.add(prompt)
-            self?.rebuildMenu()
-            iTermBridge.send(prompt: prompt, context: text)
-        }
+    func statusBarPopover(_ popover: StatusBarPopover, didSubmitPrompt prompt: String, context: String?) {
+        history.add(prompt)
+        iTermBridge.send(prompt: prompt, context: context)
+        capturedText = nil
     }
 
-    @objc private func clearHistory() {
+    func statusBarPopoverDidClearHistory(_ popover: StatusBarPopover) {
         history.clear()
-        rebuildMenu()
     }
 
     // MARK: - Services
