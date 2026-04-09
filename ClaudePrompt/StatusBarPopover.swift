@@ -70,9 +70,8 @@ final class StatusBarViewController: NSViewController, NSTextFieldDelegate {
     var onClearHistory: (() -> Void)?
     var onHotkeyChanged: ((UInt32, UInt32, String) -> Void)?
 
-    // Tab buttons
-    private let promptTab = NSButton()
-    private let settingsTab = NSButton()
+    // Tab control
+    private let tabControl = NSSegmentedControl()
 
     // Prompt view
     private let promptContainer = NSView()
@@ -113,34 +112,22 @@ final class StatusBarViewController: NSViewController, NSTextFieldDelegate {
     // MARK: - Tabs
 
     private func setupTabs(in container: NSView) {
-        promptTab.title = "Prompt"
-        promptTab.bezelStyle = .toolbar
-        promptTab.setButtonType(.pushOnPushOff)
-        promptTab.state = .on
-        promptTab.font = .systemFont(ofSize: 12, weight: .medium)
-        promptTab.target = self
-        promptTab.action = #selector(showPromptTab)
-        promptTab.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(promptTab)
-
-        settingsTab.title = "Settings"
-        settingsTab.bezelStyle = .toolbar
-        settingsTab.setButtonType(.pushOnPushOff)
-        settingsTab.state = .off
-        settingsTab.font = .systemFont(ofSize: 12, weight: .medium)
-        settingsTab.target = self
-        settingsTab.action = #selector(showSettingsTab)
-        settingsTab.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(settingsTab)
+        tabControl.segmentCount = 2
+        tabControl.setLabel("Prompt", forSegment: 0)
+        tabControl.setLabel("Settings", forSegment: 1)
+        tabControl.setWidth(100, forSegment: 0)
+        tabControl.setWidth(100, forSegment: 1)
+        tabControl.selectedSegment = 0
+        tabControl.segmentStyle = .texturedRounded
+        tabControl.font = .systemFont(ofSize: 12, weight: .medium)
+        tabControl.target = self
+        tabControl.action = #selector(tabChanged)
+        tabControl.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(tabControl)
 
         NSLayoutConstraint.activate([
-            promptTab.topAnchor.constraint(equalTo: container.topAnchor, constant: 10),
-            promptTab.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-            promptTab.widthAnchor.constraint(equalToConstant: 80),
-
-            settingsTab.topAnchor.constraint(equalTo: container.topAnchor, constant: 10),
-            settingsTab.leadingAnchor.constraint(equalTo: promptTab.trailingAnchor, constant: 4),
-            settingsTab.widthAnchor.constraint(equalToConstant: 80),
+            tabControl.topAnchor.constraint(equalTo: container.topAnchor, constant: 10),
+            tabControl.centerXAnchor.constraint(equalTo: container.centerXAnchor),
         ])
     }
 
@@ -220,7 +207,7 @@ final class StatusBarViewController: NSViewController, NSTextFieldDelegate {
         promptContainer.addSubview(clearButton)
 
         NSLayoutConstraint.activate([
-            promptContainer.topAnchor.constraint(equalTo: promptTab.bottomAnchor, constant: 10),
+            promptContainer.topAnchor.constraint(equalTo: tabControl.bottomAnchor, constant: 10),
             promptContainer.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             promptContainer.trailingAnchor.constraint(equalTo: container.trailingAnchor),
 
@@ -323,7 +310,7 @@ final class StatusBarViewController: NSViewController, NSTextFieldDelegate {
         settingsContainer.addSubview(permHint)
 
         NSLayoutConstraint.activate([
-            settingsContainer.topAnchor.constraint(equalTo: settingsTab.bottomAnchor, constant: 10),
+            settingsContainer.topAnchor.constraint(equalTo: tabControl.bottomAnchor, constant: 10),
             settingsContainer.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             settingsContainer.trailingAnchor.constraint(equalTo: container.trailingAnchor),
 
@@ -383,16 +370,22 @@ final class StatusBarViewController: NSViewController, NSTextFieldDelegate {
 
     // MARK: - Tab switching
 
+    @objc private func tabChanged() {
+        if tabControl.selectedSegment == 0 {
+            showPromptTab()
+        } else {
+            showSettingsTab()
+        }
+    }
+
     @objc func showPromptTab() {
-        promptTab.state = .on
-        settingsTab.state = .off
+        tabControl.selectedSegment = 0
         promptContainer.isHidden = false
         settingsContainer.isHidden = true
     }
 
     @objc private func showSettingsTab() {
-        promptTab.state = .off
-        settingsTab.state = .on
+        tabControl.selectedSegment = 1
         promptContainer.isHidden = true
         settingsContainer.isHidden = false
         refreshPermissions()

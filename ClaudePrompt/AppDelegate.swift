@@ -68,18 +68,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, PromptPanelDelegate, S
     }
 
     private func createMenuBarImage() -> NSImage {
+        // Use SF Symbol for reliable menubar rendering
+        if let sfImage = NSImage(systemSymbolName: "terminal", accessibilityDescription: "Claude Prompt") {
+            let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+            let configured = sfImage.withSymbolConfiguration(config) ?? sfImage
+            configured.isTemplate = true
+            return configured
+        }
+        // Fallback to text-drawn icon
         let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
             let attrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .medium),
+                .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .bold),
                 .foregroundColor: NSColor.black
             ]
-            let str = NSAttributedString(string: ">_", attributes: attrs)
-            let strSize = str.size()
-            let origin = NSPoint(
-                x: (rect.width - strSize.width) / 2,
-                y: (rect.height - strSize.height) / 2
-            )
-            str.draw(at: origin)
+            ">_".draw(at: NSPoint(x: 1, y: 2), withAttributes: attrs)
             return true
         }
         image.isTemplate = true
