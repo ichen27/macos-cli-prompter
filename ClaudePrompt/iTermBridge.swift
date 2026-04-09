@@ -16,13 +16,13 @@ final class iTermBridge {
             if (count of windows) = 0 then
                 create window with default profile
                 tell current session of current window
-                    write text "/opt/homebrew/bin/claude --dangerously-skip-permissions --prompt \\\"\(escapeForAppleScript(fullPrompt))\\\""
+                    write text "/opt/homebrew/bin/claude --dangerously-skip-permissions \\\"\(escapeForAppleScript(fullPrompt))\\\""
                 end tell
             else
                 tell current window
                     create tab with default profile
                     tell current session
-                        write text "/opt/homebrew/bin/claude --dangerously-skip-permissions --prompt \\\"\(escapeForAppleScript(fullPrompt))\\\""
+                        write text "/opt/homebrew/bin/claude --dangerously-skip-permissions \\\"\(escapeForAppleScript(fullPrompt))\\\""
                     end tell
                 end tell
             end if
