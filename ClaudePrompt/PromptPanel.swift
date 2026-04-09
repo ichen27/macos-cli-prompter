@@ -116,16 +116,33 @@ final class PromptPanel: NSPanel, NSTextFieldDelegate {
         textField.stringValue = ""
         updateCharCount()
 
-        guard let screen = NSScreen.main else { return }
+        // Use the screen where the mouse cursor is
+        let mouseLocation = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first(where: { NSMouseInRect(mouseLocation, $0.frame, false) }) ?? NSScreen.screens.first!
         let screenFrame = screen.visibleFrame
         let x = screenFrame.midX - frame.width / 2
-        let y = screenFrame.midY - frame.height / 2 + screenFrame.height * 0.15
+        let y = screenFrame.origin.y + screenFrame.height * 0.65
+
+        let logFile = NSHomeDirectory() + "/ClaudePrompt/debug.log"
+        let msg = "\(Date()): [Panel] mouse=\(mouseLocation) screen=\(screen.frame) visible=\(screenFrame) computed=(\(x),\(y))\n"
+        if let data = msg.data(using: .utf8), let fh = FileHandle(forWritingAtPath: logFile) {
+            fh.seekToEndOfFile(); fh.write(data); fh.closeFile()
+        }
+
         setFrameOrigin(NSPoint(x: x, y: y))
 
-        makeKeyAndOrderFront(nil)
-        textField.becomeFirstResponder()
+        // Ensure panel appears above everything
+        level = .screenSaver
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
         NSApp.activate(ignoringOtherApps: true)
+        makeKeyAndOrderFront(nil)
+
+        // Force focus after a brief delay to ensure activation completes
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            self?.makeKeyAndOrderFront(nil)
+            self?.makeFirstResponder(self?.textField)
+        }
     }
 
     func dismiss() {

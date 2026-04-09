@@ -7,13 +7,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, PromptPanelDelegate {
     private let history = PromptHistoryManager.shared
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        debugLog("App launched")
         setupStatusItem()
         setupHotkey()
+        setupClipboardWatcher()
         promptPanel.promptDelegate = self
 
         NSApp.setActivationPolicy(.accessory)
         NSApp.servicesProvider = self
         NSUpdateDynamicServices()
+        debugLog("Setup complete")
+    }
+
+    private func debugLog(_ msg: String) {
+        let logFile = NSHomeDirectory() + "/ClaudePrompt/debug.log"
+        let line = "\(Date()): \(msg)\n"
+        if let data = line.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: logFile) {
+                if let fh = FileHandle(forWritingAtPath: logFile) {
+                    fh.seekToEndOfFile()
+                    fh.write(data)
+                    fh.closeFile()
+                }
+            } else {
+                try? data.write(to: URL(fileURLWithPath: logFile))
+            }
+        }
     }
 
     // MARK: - Status Item
@@ -81,6 +100,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, PromptPanelDelegate {
         statusItem.menu = menu
     }
 
+    // MARK: - Clipboard Watcher
+
+    private func setupClipboardWatcher() {
+        ClipboardWatcher.shared.onDoubleCopy = { [weak self] text in
+            self?.debugLog("Double-copy detected: '\(text.prefix(30))...'")
+            self?.capturedText = text
+            self?.promptPanel.show(selectedTextLength: text.count)
+        }
+        ClipboardWatcher.shared.start()
+    }
+
     // MARK: - Hotkey
 
     private func setupHotkey() {
@@ -91,6 +121,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, PromptPanelDelegate {
     }
 
     private func triggerPrompt() {
+        debugLog("triggerPrompt called!")
         HotkeyManager.shared.captureSelectedText { [weak self] text in
             self?.capturedText = text
             self?.promptPanel.show(selectedTextLength: text?.count ?? 0)
