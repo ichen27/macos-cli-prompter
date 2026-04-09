@@ -5,12 +5,13 @@ A lightweight macOS menubar app that lets you highlight text anywhere on screen,
 ## Demo
 
 1. Highlight any text on screen
-2. Press `Cmd+Shift+C` (or right-click → Services → "Send to Claude")
+2. **Double-copy** (`Cmd+C Cmd+C` quickly), press `Cmd+Shift+C`, or right-click → Services → "Send to Claude"
 3. A minimal popup appears — type what you want Claude to do
 4. Hit Enter — a new iTerm tab opens with Claude Code running your prompt
 
 ## Features
 
+- **Double-copy trigger** (`Cmd+C Cmd+C`) — copy twice within 500ms to trigger the popup. Most reliable method — no extra permissions needed
 - **Global hotkey** (`Cmd+Shift+C`) — works in any app
 - **Right-click Services menu** — "Send to Claude" appears when text is selected
 - **Minimal floating popup** — just a text field, no clutter
@@ -56,7 +57,7 @@ open build/ClaudePrompt.app
 
 ### First launch
 
-macOS will prompt you to grant **Accessibility permission**. This is required for the global hotkey and text capture to work.
+macOS will prompt you to grant **Accessibility permission**. This is required for the global hotkey (`Cmd+Shift+C`). The double-copy trigger works without any permissions.
 
 1. Go to **System Settings → Privacy & Security → Accessibility**
 2. Enable **ClaudePrompt**
@@ -64,8 +65,9 @@ macOS will prompt you to grant **Accessibility permission**. This is required fo
 
 ## How It Works
 
-1. **Text capture** — When triggered, the app simulates `Cmd+C` to copy your selected text, reads it from the pasteboard, then restores the original clipboard contents.
-2. **Popup** — A borderless floating `NSPanel` appears centered on your screen with a single text field.
+1. **Double-copy detection** — A clipboard watcher polls `NSPasteboard.changeCount` every 200ms. If two copies happen within 500ms, it triggers the popup with the copied text as context. No permissions required.
+2. **Global hotkey** — Carbon `RegisterEventHotKey` captures `Cmd+Shift+C` globally. When triggered, simulates `Cmd+C` to grab selected text.
+3. **Popup** — A borderless floating `NSPanel` appears on the screen where your mouse cursor is.
 3. **iTerm bridge** — On submit, an AppleScript tells iTerm to open a new tab and runs:
    ```
    claude --prompt "Given this context:\n<selected text>\n\nTask: <your prompt>"
@@ -76,7 +78,8 @@ macOS will prompt you to grant **Accessibility permission**. This is required fo
 
 - **Language:** Swift 5
 - **UI Framework:** AppKit (pure, no SwiftUI)
-- **Global Hotkey:** `CGEvent` tap via Quartz Event Services
+- **Double-Copy Detection:** `NSPasteboard.changeCount` polling (200ms interval, 500ms window)
+- **Global Hotkey:** Carbon `RegisterEventHotKey` + `NSEvent` monitors as fallback
 - **Text Capture:** `CGEvent`-based `Cmd+C` simulation + `NSPasteboard`
 - **Popup:** Borderless `NSPanel` with `NSVisualEffectView` (vibrancy)
 - **iTerm Integration:** `NSAppleScript`
@@ -91,6 +94,7 @@ ClaudePrompt/
   main.swift                 # App entry point
   AppDelegate.swift          # Menubar, menu, coordination
   HotkeyManager.swift        # Global hotkey + text capture
+  ClipboardWatcher.swift     # Double-copy detection
   PromptPanel.swift          # Floating popup UI
   iTermBridge.swift          # AppleScript bridge to iTerm
   PromptHistoryManager.swift # UserDefaults-backed history
