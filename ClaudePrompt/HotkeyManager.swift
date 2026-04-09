@@ -36,20 +36,45 @@ final class HotkeyManager {
     private var hotKeyRef: EventHotKeyRef?
     private var globalMonitor: Any?
     private var localMonitor: Any?
+    private var currentKeyCode: UInt32 = UInt32(kVK_ANSI_C)
+    private var currentModifiers: UInt32 = UInt32(cmdKey | shiftKey)
     var onTrigger: (() -> Void)?
 
-    private init() {}
+    private init() {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: "hotkeyKeyCode") != nil {
+            currentKeyCode = UInt32(defaults.integer(forKey: "hotkeyKeyCode"))
+            currentModifiers = UInt32(defaults.integer(forKey: "hotkeyModifiers"))
+        }
+    }
 
     func start() {
         debugLog("start() called, AXIsProcessTrusted=\(AXIsProcessTrusted())")
 
-        // Strategy 1: Carbon hotkey (works globally for .accessory apps)
         let carbonOK = registerCarbonHotkey()
         debugLog("Carbon hotkey: \(carbonOK ? "OK" : "FAILED")")
 
-        // Strategy 2: NSEvent monitors (always register as backup)
         registerNSEventMonitors()
         debugLog("NSEvent monitors registered")
+    }
+
+    func reregister(keyCode: UInt32, modifiers: UInt32) {
+        currentKeyCode = keyCode
+        currentModifiers = modifiers
+
+        // Unregister old Carbon hotkey
+        if let ref = hotKeyRef {
+            UnregisterEventHotKey(ref)
+            hotKeyRef = nil
+        }
+        // Unregister old NSEvent monitors
+        if let m = globalMonitor { NSEvent.removeMonitor(m); globalMonitor = nil }
+        if let m = localMonitor { NSEvent.removeMonitor(m); localMonitor = nil }
+
+        // Re-register with new key
+        let carbonOK = registerCarbonHotkey()
+        registerNSEventMonitors()
+        debugLog("Reregistered hotkey: keyCode=\(keyCode) mods=\(modifiers) carbon=\(carbonOK)")
     }
 
     // MARK: - Carbon Hot Key
@@ -58,8 +83,8 @@ final class HotkeyManager {
         let hotKeyID = EventHotKeyID(signature: OSType(0x434C5044), id: 1)
 
         let status = RegisterEventHotKey(
-            UInt32(kVK_ANSI_C),
-            UInt32(cmdKey | shiftKey),
+            currentKeyCode,
+            currentModifiers,
             hotKeyID,
             GetApplicationEventTarget(),
             0,
@@ -113,7 +138,12 @@ final class HotkeyManager {
 
     private func isHotkey(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        return flags.contains([.command, .shift]) && event.keyCode == UInt16(kVK_ANSI_C)
+        var requiredFlags: NSEvent.ModifierFlags = []
+        if currentModifiers & UInt32(cmdKey) != 0 { requiredFlags.insert(.command) }
+        if currentModifiers & UInt32(shiftKey) != 0 { requiredFlags.insert(.shift) }
+        if currentModifiers & UInt32(optionKey) != 0 { requiredFlags.insert(.option) }
+        if currentModifiers & UInt32(controlKey) != 0 { requiredFlags.insert(.control) }
+        return flags.contains(requiredFlags) && event.keyCode == UInt16(currentKeyCode)
     }
 
     private func handleKeyEvent(_ event: NSEvent) {

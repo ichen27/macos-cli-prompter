@@ -143,6 +143,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, PromptPanelDelegate, S
         history.clear()
     }
 
+    func statusBarPopoverDidChangeHotkey(_ popover: StatusBarPopover, keyCode: UInt32, modifiers: UInt32) {
+        debugLog("Hotkey changed: keyCode=\(keyCode) modifiers=\(modifiers)")
+        HotkeyManager.shared.reregister(keyCode: keyCode, modifiers: modifiers)
+    }
+
     // MARK: - Services
 
     @objc func sendToClaudePrompt(_ pboard: NSPasteboard, userData: String, error: AutoreleasingUnsafeMutablePointer<NSString?>) {
