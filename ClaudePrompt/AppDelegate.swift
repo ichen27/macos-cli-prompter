@@ -1,10 +1,10 @@
 import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate, PromptPanelDelegate, StatusBarPopoverDelegate {
-    private var statusItem: NSStatusItem!
-    private let promptPanel = PromptPanel()
-    private let statusPopover = StatusBarPopover()
-    private var capturedText: String?
+    var statusItem: NSStatusItem!
+    let promptPanel = PromptPanel()
+    let statusPopover = StatusBarPopover()
+    var capturedText: String?
     private let history = PromptHistoryManager.shared
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -21,7 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, PromptPanelDelegate, S
         debugLog("Setup complete")
     }
 
-    private func debugLog(_ msg: String) {
+    func debugLog(_ msg: String) {
         let logFile = NSHomeDirectory() + "/ClaudePrompt/debug.log"
         let line = "\(Date()): \(msg)\n"
         if let data = line.data(using: .utf8) {
@@ -63,6 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, PromptPanelDelegate, S
         } else {
             // Left-click: toggle popover
             guard let button = statusItem.button else { return }
+            NSApp.activate(ignoringOtherApps: true)
             statusPopover.toggle(relativeTo: button)
         }
     }
@@ -91,12 +92,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, PromptPanelDelegate, S
     // MARK: - Clipboard Watcher
 
     private func setupClipboardWatcher() {
-        ClipboardWatcher.shared.onDoubleCopy = { [weak self] text in
-            self?.debugLog("Double-copy detected: '\(text.prefix(30))...'")
-            self?.capturedText = text
-            // Show in popover anchored to status bar
-            if let button = self?.statusItem.button {
-                self?.statusPopover.showWithContext(text, relativeTo: button)
+        ClipboardWatcher.shared.onDoubleCopy = { [unowned self] text in
+            self.capturedText = text
+            NSApp.activate(ignoringOtherApps: true)
+            if let button = self.statusItem.button {
+                self.statusPopover.showWithContext(text, relativeTo: button)
             }
         }
         ClipboardWatcher.shared.start()

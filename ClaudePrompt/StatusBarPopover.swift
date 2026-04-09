@@ -9,17 +9,15 @@ protocol StatusBarPopoverDelegate: AnyObject {
 final class StatusBarPopover: NSObject {
     weak var delegate: StatusBarPopoverDelegate?
 
-    private let popover = NSPopover()
+    private var panel: NSPanel!
     private let viewController = StatusBarViewController()
 
     override init() {
         super.init()
-        popover.contentViewController = viewController
-        popover.behavior = .transient
-        popover.animates = true
+        setupPanel()
         viewController.onSubmit = { [weak self] prompt, context in
             guard let self = self else { return }
-            self.popover.close()
+            self.panel.orderOut(nil)
             self.delegate?.statusBarPopover(self, didSubmitPrompt: prompt, context: context)
         }
         viewController.onClearHistory = { [weak self] in
@@ -33,34 +31,112 @@ final class StatusBarPopover: NSObject {
         }
     }
 
+    private func setupPanel() {
+        let panelWidth: CGFloat = 380
+        let panelHeight: CGFloat = 420
+        panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight),
+            styleMask: [.nonactivatingPanel, .titled, .closable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        panel.isFloatingPanel = true
+        panel.level = .popUpMenu
+        panel.titleVisibility = .hidden
+        panel.titlebarAppearsTransparent = true
+        panel.isMovableByWindowBackground = false
+        panel.backgroundColor = .clear
+        panel.isOpaque = false
+        panel.hasShadow = true
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+
+        // Vibrancy background
+        let effectView = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight))
+        effectView.material = .popover
+        effectView.blendingMode = .behindWindow
+        effectView.state = .active
+        effectView.autoresizingMask = [.width, .height]
+
+        panel.contentView = effectView
+        effectView.addSubview(viewController.view)
+        viewController.view.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            viewController.view.topAnchor.constraint(equalTo: effectView.topAnchor),
+            viewController.view.bottomAnchor.constraint(equalTo: effectView.bottomAnchor),
+            viewController.view.leadingAnchor.constraint(equalTo: effectView.leadingAnchor),
+            viewController.view.trailingAnchor.constraint(equalTo: effectView.trailingAnchor),
+        ])
+
+        // Close when clicking outside
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(panelDidResignKey),
+            name: NSWindow.didResignKeyNotification, object: panel
+        )
+    }
+
+    @objc private func panelDidResignKey() {
+        panel.orderOut(nil)
+    }
+
     func toggle(relativeTo button: NSView) {
-        if popover.isShown {
-            popover.close()
+        if panel.isVisible {
+            panel.orderOut(nil)
         } else {
-            viewController.updateContext(NSPasteboard.general.string(forType: .string))
-            viewController.reloadHistory()
-            viewController.refreshPermissions()
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                self.viewController.focusPromptField()
-            }
+            showPanel(relativeTo: button)
         }
     }
 
     func showWithContext(_ text: String?, relativeTo button: NSView) {
         viewController.updateContext(text)
+        showPanel(relativeTo: button)
+    }
+
+    private func showPanel(relativeTo button: NSView) {
+        viewController.updateContext(viewController.currentContextValue ?? NSPasteboard.general.string(forType: .string))
         viewController.reloadHistory()
         viewController.refreshPermissions()
-        if !popover.isShown {
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+
+        guard let buttonWindow = button.window else {
+            debugLog("showPanel: button has no window")
+            return
         }
+
+        // Get button's screen position
+        let buttonRect = button.convert(button.bounds, to: nil)
+        let screenRect = buttonWindow.convertToScreen(buttonRect)
+
+        // Position panel below the button, centered
+        let panelWidth = panel.frame.width
+        let panelHeight = panel.frame.height
+        let x = screenRect.midX - panelWidth / 2
+        let y = screenRect.minY - panelHeight - 4
+
+        panel.setFrameOrigin(NSPoint(x: x, y: y))
+        panel.orderFrontRegardless()
+        panel.makeKey()
+
+        debugLog("showPanel: screenRect=\(screenRect) panelOrigin=(\(x),\(y))")
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             self.viewController.focusPromptField()
         }
     }
 
-    var isShown: Bool { popover.isShown }
-    func close() { popover.close() }
+    private func debugLog(_ msg: String) {
+        let logFile = NSHomeDirectory() + "/ClaudePrompt/debug.log"
+        let line = "\(Date()): [Popover] \(msg)\n"
+        if let data = line.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: logFile),
+               let fh = FileHandle(forWritingAtPath: logFile) {
+                fh.seekToEndOfFile(); fh.write(data); fh.closeFile()
+            } else {
+                try? data.write(to: URL(fileURLWithPath: logFile))
+            }
+        }
+    }
+
+    var isShown: Bool { panel.isVisible }
+    func close() { panel.orderOut(nil) }
 }
 
 // MARK: - View Controller
@@ -97,11 +173,13 @@ final class StatusBarViewController: NSViewController, NSTextFieldDelegate {
     // Footer
     private let quitButton = NSButton()
 
-    private var currentContext: String?
+    private(set) var currentContext: String?
+    var currentContextValue: String? { currentContext }
 
     override func loadView() {
         let container = NSView(frame: NSRect(x: 0, y: 0, width: 380, height: 420))
         self.view = container
+        self.preferredContentSize = NSSize(width: 380, height: 420)
         setupTabs(in: container)
         setupPromptView(in: container)
         setupSettingsView(in: container)
