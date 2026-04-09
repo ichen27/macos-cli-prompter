@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>ClaudePrompt</string>
+    <key>CFBundleDisplayName</key>
+    <string>Claude Prompt</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.local.ClaudePrompt</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleExecutable</key>
+    <string>ClaudePrompt</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSServices</key>
+    <array>
+        <dict>
+            <key>NSMessage</key>
+            <string>sendToClaudePrompt</string>
+            <key>NSPortName</key>
+            <string>ClaudePrompt</string>
+            <key>NSMenuItem</key>
+            <dict>
+                <key>default</key>
+                <string>Send to Claude</string>
+            </dict>
+            <key>NSSendTypes</key>
+            <array>
+                <string>NSStringPboardType</string>
+            </array>
+        </dict>
+    </array>
+</dict>
+</plist>
